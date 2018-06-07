@@ -242,7 +242,7 @@ func NewNode(config *cfg.Config,
 
 	// Make ConsensusReactor
 	consensusState := cs.NewConsensusState(config.Consensus, state.Copy(),
-		blockExec, blockStore, mempool, evidencePool)
+		blockExec, blockStore, mempool, evidencePool, proxyApp.Consensus())
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
