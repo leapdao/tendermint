@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tendermint/abci/example/kvstore"
@@ -23,10 +24,10 @@ import (
 	dbm "github.com/tendermint/tmlibs/db"
 
 	cfg "github.com/tendermint/tendermint/config"
+	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
-	pvm "github.com/tendermint/tendermint/types/priv_validator"
 	"github.com/tendermint/tmlibs/log"
 )
 
@@ -218,15 +219,15 @@ func (e ReachedHeightToStopError) Error() string {
 	return fmt.Sprintf("reached height to stop %d", e.height)
 }
 
-// Save simulate WAL's crashing by sending an error to the panicCh and then
+// Write simulate WAL's crashing by sending an error to the panicCh and then
 // exiting the cs.receiveRoutine.
-func (w *crashingWAL) Save(m WALMessage) {
+func (w *crashingWAL) Write(m WALMessage) {
 	if endMsg, ok := m.(EndHeightMessage); ok {
 		if endMsg.Height == w.heightToStop {
 			w.panicCh <- ReachedHeightToStopError{endMsg.Height}
 			runtime.Goexit()
 		} else {
-			w.next.Save(m)
+			w.next.Write(m)
 		}
 		return
 	}
@@ -238,8 +239,12 @@ func (w *crashingWAL) Save(m WALMessage) {
 		runtime.Goexit()
 	} else {
 		w.msgIndex++
-		w.next.Save(m)
+		w.next.Write(m)
 	}
+}
+
+func (w *crashingWAL) WriteSync(m WALMessage) {
+	w.Write(m)
 }
 
 func (w *crashingWAL) Group() *auto.Group { return w.next.Group() }
@@ -259,8 +264,8 @@ const (
 )
 
 var (
-	mempool = types.MockMempool{}
-	evpool  = types.MockEvidencePool{}
+	mempool = sm.MockMempool{}
+	evpool  = sm.MockEvidencePool{}
 )
 
 //---------------------------------------
@@ -325,7 +330,7 @@ func testHandshakeReplay(t *testing.T, nBlocks int, mode uint) {
 	walFile := tempWALWithData(walBody)
 	config.Consensus.SetWalFile(walFile)
 
-	privVal := pvm.LoadFilePV(config.PrivValidatorFile())
+	privVal := privval.LoadFilePV(config.PrivValidatorFile())
 
 	wal, err := NewWAL(walFile)
 	if err != nil {
@@ -362,7 +367,8 @@ func testHandshakeReplay(t *testing.T, nBlocks int, mode uint) {
 	}
 
 	// now start the app using the handshake - it should sync
-	handshaker := NewHandshaker(stateDB, state, store, nil)
+	genDoc, _ := sm.MakeGenesisDocFromFile(config.GenesisFile())
+	handshaker := NewHandshaker(stateDB, state, store, genDoc)
 	proxyApp := proxy.NewAppConns(clientCreator2, handshaker)
 	if err := proxyApp.Start(); err != nil {
 		t.Fatalf("Error starting proxy app connections: %v", err)
@@ -412,10 +418,10 @@ func buildAppStateFromChain(proxyApp proxy.AppConns, stateDB dbm.DB,
 	}
 	defer proxyApp.Stop()
 
-	// TODO: get the genesis bytes (https://github.com/tendermint/tendermint/issues/1224)
-	var genesisBytes []byte
 	validators := types.TM2PB.Validators(state.Validators)
-	if _, err := proxyApp.Consensus().InitChainSync(abci.RequestInitChain{validators, genesisBytes}); err != nil {
+	if _, err := proxyApp.Consensus().InitChainSync(abci.RequestInitChain{
+		Validators: validators,
+	}); err != nil {
 		panic(err)
 	}
 
@@ -449,10 +455,10 @@ func buildTMStateFromChain(config *cfg.Config, stateDB dbm.DB, state sm.State, c
 	}
 	defer proxyApp.Stop()
 
-	// TODO: get the genesis bytes (https://github.com/tendermint/tendermint/issues/1224)
-	var genesisBytes []byte
 	validators := types.TM2PB.Validators(state.Validators)
-	if _, err := proxyApp.Consensus().InitChainSync(abci.RequestInitChain{validators, genesisBytes}); err != nil {
+	if _, err := proxyApp.Consensus().InitChainSync(abci.RequestInitChain{
+		Validators: validators,
+	}); err != nil {
 		panic(err)
 	}
 
@@ -628,4 +634,54 @@ func (bs *mockBlockStore) LoadBlockCommit(height int64) *types.Commit {
 }
 func (bs *mockBlockStore) LoadSeenCommit(height int64) *types.Commit {
 	return bs.commits[height-1]
+}
+
+//----------------------------------------
+
+func TestInitChainUpdateValidators(t *testing.T) {
+	val, _ := types.RandValidator(true, 10)
+	vals := types.NewValidatorSet([]*types.Validator{val})
+	app := &initChainApp{vals: types.TM2PB.Validators(vals)}
+	clientCreator := proxy.NewLocalClientCreator(app)
+
+	config := ResetConfig("proxy_test_")
+	privVal := privval.LoadFilePV(config.PrivValidatorFile())
+	stateDB, state, store := stateAndStore(config, privVal.GetPubKey())
+
+	oldValAddr := state.Validators.Validators[0].Address
+
+	// now start the app using the handshake - it should sync
+	genDoc, _ := sm.MakeGenesisDocFromFile(config.GenesisFile())
+	handshaker := NewHandshaker(stateDB, state, store, genDoc)
+	proxyApp := proxy.NewAppConns(clientCreator, handshaker)
+	if err := proxyApp.Start(); err != nil {
+		t.Fatalf("Error starting proxy app connections: %v", err)
+	}
+	defer proxyApp.Stop()
+
+	// reload the state, check the validator set was updated
+	state = sm.LoadState(stateDB)
+
+	newValAddr := state.Validators.Validators[0].Address
+	expectValAddr := val.Address
+	assert.NotEqual(t, oldValAddr, newValAddr)
+	assert.Equal(t, newValAddr, expectValAddr)
+}
+
+func newInitChainApp(vals []abci.Validator) *initChainApp {
+	return &initChainApp{
+		vals: vals,
+	}
+}
+
+// returns the vals on InitChain
+type initChainApp struct {
+	abci.BaseApplication
+	vals []abci.Validator
+}
+
+func (ica *initChainApp) InitChain(req abci.RequestInitChain) abci.ResponseInitChain {
+	return abci.ResponseInitChain{
+		Validators: ica.vals,
+	}
 }

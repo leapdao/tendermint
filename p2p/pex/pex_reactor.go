@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tendermint/go-amino"
+	amino "github.com/tendermint/go-amino"
 	cmn "github.com/tendermint/tmlibs/common"
 
 	"github.com/tendermint/tendermint/p2p"
@@ -267,7 +267,7 @@ func (r *PEXReactor) receiveRequest(src Peer) error {
 	now := time.Now()
 	minInterval := r.minReceiveRequestInterval()
 	if now.Sub(lastReceived) < minInterval {
-		return fmt.Errorf("Peer (%v) send next PEX request too soon. lastReceived: %v, now: %v, minInterval: %v. Disconnecting",
+		return fmt.Errorf("Peer (%v) sent next PEX request too soon. lastReceived: %v, now: %v, minInterval: %v. Disconnecting",
 			src.ID(),
 			lastReceived,
 			now,
@@ -281,6 +281,7 @@ func (r *PEXReactor) receiveRequest(src Peer) error {
 // RequestAddrs asks peer for more addresses if we do not already
 // have a request out for this peer.
 func (r *PEXReactor) RequestAddrs(p Peer) {
+	r.Logger.Debug("Request addrs", "from", p)
 	id := string(p.ID())
 	if r.requestsSent.Has(id) {
 		return

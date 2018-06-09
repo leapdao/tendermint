@@ -11,7 +11,7 @@ import (
 	rpcclient "github.com/tendermint/tendermint/rpc/lib/client"
 	"github.com/tendermint/tendermint/types"
 	cmn "github.com/tendermint/tmlibs/common"
-	tmpubsub "github.com/tendermint/tmlibs/pubsub"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 )
 
 /*
@@ -204,17 +204,19 @@ func (c *HTTP) Tx(hash []byte, prove bool) (*ctypes.ResultTx, error) {
 	return result, nil
 }
 
-func (c *HTTP) TxSearch(query string, prove bool) ([]*ctypes.ResultTx, error) {
-	results := new([]*ctypes.ResultTx)
+func (c *HTTP) TxSearch(query string, prove bool, page, perPage int) (*ctypes.ResultTxSearch, error) {
+	result := new(ctypes.ResultTxSearch)
 	params := map[string]interface{}{
-		"query": query,
-		"prove": prove,
+		"query":    query,
+		"prove":    prove,
+		"page":     page,
+		"per_page": perPage,
 	}
-	_, err := c.rpc.Call("tx_search", params, results)
+	_, err := c.rpc.Call("tx_search", params, result)
 	if err != nil {
 		return nil, errors.Wrap(err, "TxSearch")
 	}
-	return *results, nil
+	return result, nil
 }
 
 func (c *HTTP) Validators(height *int64) (*ctypes.ResultValidators, error) {

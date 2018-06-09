@@ -42,7 +42,6 @@ Tendermint Tools
    deploy-testnets.rst
    terraform-and-ansible.rst
    tools/docker.rst
-   tools/mintnet-kubernetes.rst
    tools/benchmarking.rst
    tools/monitoring.rst
 
@@ -56,7 +55,10 @@ Tendermint 102
    abci-spec.rst
    app-architecture.rst
    app-development.rst
+   subscribing-to-events-via-websocket.rst
+   indexing-transactions.rst
    how-to-read-logs.rst
+   running-in-production.rst
 
 Tendermint 201
 --------------
@@ -66,6 +68,7 @@ Tendermint 201
 
    specification.rst
    determinism.rst
+   transactional-semantics.rst
 
 * For a deeper dive, see `this thesis <https://atrium.lib.uoguelph.ca/xmlui/handle/10214/9769>`__.
 * There is also the `original whitepaper <https://tendermint.com/static/docs/tendermint.pdf>`__, though it is now quite outdated.

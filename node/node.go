@@ -21,6 +21,7 @@ import (
 	mempl "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
+	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/proxy"
 	rpccore "github.com/tendermint/tendermint/rpc/core"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -32,7 +33,6 @@ import (
 	"github.com/tendermint/tendermint/state/txindex/kv"
 	"github.com/tendermint/tendermint/state/txindex/null"
 	"github.com/tendermint/tendermint/types"
-	pvm "github.com/tendermint/tendermint/types/priv_validator"
 	"github.com/tendermint/tendermint/version"
 
 	_ "net/http/pprof"
@@ -77,7 +77,7 @@ type NodeProvider func(*cfg.Config, log.Logger) (*Node, error)
 // It implements NodeProvider.
 func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 	return NewNode(config,
-		pvm.LoadOrGenFilePV(config.PrivValidatorFile()),
+		privval.LoadOrGenFilePV(config.PrivValidatorFile()),
 		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
 		DefaultGenesisDocProviderFunc(config),
 		DefaultDBProvider,
@@ -159,7 +159,7 @@ func NewNode(config *cfg.Config,
 	// and sync tendermint and the app by performing a handshake
 	// and replaying any necessary blocks
 	consensusLogger := logger.With("module", "consensus")
-	handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc.AppState())
+	handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc)
 	handshaker.SetLogger(consensusLogger)
 	proxyApp := proxy.NewAppConns(clientCreator, handshaker)
 	proxyApp.SetLogger(logger.With("module", "proxy"))
@@ -177,8 +177,8 @@ func NewNode(config *cfg.Config,
 			// TODO: persist this key so external signer
 			// can actually authenticate us
 			privKey = crypto.GenPrivKeyEd25519()
-			pvsc    = pvm.NewSocketPV(
-				logger.With("module", "pvm"),
+			pvsc    = privval.NewSocketPV(
+				logger.With("module", "privval"),
 				config.PrivValidatorListenAddr,
 				privKey,
 			)
@@ -269,9 +269,6 @@ func NewNode(config *cfg.Config,
 	// but it would still be nice to have a clear list of the current "PersistentPeers"
 	// somewhere that we can return with net_info.
 	//
-	// Let's assume we always have IDs ... and we just dont authenticate them
-	// if auth_enc=false.
-	//
 	// If PEX is on, it should handle dialing the seeds. Otherwise the switch does it.
 	// Note we currently use the addrBook regardless at least for AddOurAddress
 	addrBook := pex.NewAddrBook(config.P2P.AddrBookFile(), config.P2P.AddrBookStrict)
@@ -305,7 +302,7 @@ func NewNode(config *cfg.Config,
 			return nil
 		})
 		sw.SetIDFilter(func(id p2p.ID) error {
-			resQuery, err := proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/pubkey/%s", id)})
+			resQuery, err := proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/id/%s", id)})
 			if err != nil {
 				return err
 			}
@@ -450,7 +447,7 @@ func (n *Node) OnStop() {
 	n.eventBus.Stop()
 	n.indexerService.Stop()
 
-	if pvsc, ok := n.privValidator.(*pvm.SocketPV); ok {
+	if pvsc, ok := n.privValidator.(*privval.SocketPV); ok {
 		if err := pvsc.Stop(); err != nil {
 			n.Logger.Error("Error stopping priv validator socket client", "err", err)
 		}

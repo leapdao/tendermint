@@ -122,9 +122,6 @@ like the file below, however, double check by inspecting the
     # Does not work if the peer-exchange reactor is disabled.
     seed_mode = false
 
-    # Authenticated encryption
-    auth_enc = true
-
     # Comma separated list of peer IDs to keep private (will not be gossiped to other peers)
     private_peer_ids = ""
 
@@ -135,6 +132,12 @@ like the file below, however, double check by inspecting the
     recheck_empty = true
     broadcast = true
     wal_dir = "data/mempool.wal"
+
+    # size of the mempool
+    size = 100000
+
+    # size of the cache (used to filter transactions we saw earlier)
+    cache_size = 100000
 
     ##### consensus configuration options #####
     [consensus]

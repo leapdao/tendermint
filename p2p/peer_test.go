@@ -10,8 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	crypto "github.com/tendermint/go-crypto"
-	tmconn "github.com/tendermint/tendermint/p2p/conn"
+	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
+
+	"github.com/tendermint/tendermint/config"
+	tmconn "github.com/tendermint/tendermint/p2p/conn"
 )
 
 const testCh = 0x01
@@ -20,11 +23,11 @@ func TestPeerBasic(t *testing.T) {
 	assert, require := assert.New(t), require.New(t)
 
 	// simulate remote peer
-	rp := &remotePeer{PrivKey: crypto.GenPrivKeyEd25519(), Config: DefaultPeerConfig()}
+	rp := &remotePeer{PrivKey: crypto.GenPrivKeyEd25519(), Config: cfg}
 	rp.Start()
 	defer rp.Stop()
 
-	p, err := createOutboundPeerAndPerformHandshake(rp.Addr(), DefaultPeerConfig())
+	p, err := createOutboundPeerAndPerformHandshake(rp.Addr(), cfg, tmconn.DefaultMConnConfig())
 	require.Nil(err)
 
 	err = p.Start()
@@ -40,39 +43,17 @@ func TestPeerBasic(t *testing.T) {
 	assert.Equal(rp.ID(), p.ID())
 }
 
-func TestPeerWithoutAuthEnc(t *testing.T) {
-	assert, require := assert.New(t), require.New(t)
-
-	config := DefaultPeerConfig()
-	config.AuthEnc = false
-
-	// simulate remote peer
-	rp := &remotePeer{PrivKey: crypto.GenPrivKeyEd25519(), Config: config}
-	rp.Start()
-	defer rp.Stop()
-
-	p, err := createOutboundPeerAndPerformHandshake(rp.Addr(), config)
-	require.Nil(err)
-
-	err = p.Start()
-	require.Nil(err)
-	defer p.Stop()
-
-	assert.True(p.IsRunning())
-}
-
 func TestPeerSend(t *testing.T) {
 	assert, require := assert.New(t), require.New(t)
 
-	config := DefaultPeerConfig()
-	config.AuthEnc = false
+	config := cfg
 
 	// simulate remote peer
 	rp := &remotePeer{PrivKey: crypto.GenPrivKeyEd25519(), Config: config}
 	rp.Start()
 	defer rp.Stop()
 
-	p, err := createOutboundPeerAndPerformHandshake(rp.Addr(), config)
+	p, err := createOutboundPeerAndPerformHandshake(rp.Addr(), config, tmconn.DefaultMConnConfig())
 	require.Nil(err)
 
 	err = p.Start()
@@ -84,7 +65,11 @@ func TestPeerSend(t *testing.T) {
 	assert.True(p.Send(testCh, []byte("Asylum")))
 }
 
-func createOutboundPeerAndPerformHandshake(addr *NetAddress, config *PeerConfig) (*peer, error) {
+func createOutboundPeerAndPerformHandshake(
+	addr *NetAddress,
+	config *config.P2PConfig,
+	mConfig tmconn.MConnConfig,
+) (*peer, error) {
 	chDescs := []*tmconn.ChannelDescriptor{
 		{ID: testCh, Priority: 1},
 	}
@@ -105,41 +90,50 @@ func createOutboundPeerAndPerformHandshake(addr *NetAddress, config *PeerConfig)
 		return nil, err
 	}
 
-	p := newPeer(pc, nodeInfo, reactorsByCh, chDescs, func(p Peer, r interface{}) {})
+	p := newPeer(pc, mConfig, nodeInfo, reactorsByCh, chDescs, func(p Peer, r interface{}) {})
 	p.SetLogger(log.TestingLogger().With("peer", addr))
 	return p, nil
 }
 
 type remotePeer struct {
-	PrivKey crypto.PrivKey
-	Config  *PeerConfig
-	addr    *NetAddress
-	quit    chan struct{}
+	PrivKey    crypto.PrivKey
+	Config     *config.P2PConfig
+	addr       *NetAddress
+	quit       chan struct{}
+	channels   cmn.HexBytes
+	listenAddr string
 }
 
-func (p *remotePeer) Addr() *NetAddress {
-	return p.addr
+func (rp *remotePeer) Addr() *NetAddress {
+	return rp.addr
 }
 
-func (p *remotePeer) ID() ID {
-	return PubKeyToID(p.PrivKey.PubKey())
+func (rp *remotePeer) ID() ID {
+	return PubKeyToID(rp.PrivKey.PubKey())
 }
 
-func (p *remotePeer) Start() {
-	l, e := net.Listen("tcp", "127.0.0.1:0") // any available address
+func (rp *remotePeer) Start() {
+	if rp.listenAddr == "" {
+		rp.listenAddr = "127.0.0.1:0"
+	}
+
+	l, e := net.Listen("tcp", rp.listenAddr) // any available address
 	if e != nil {
 		golog.Fatalf("net.Listen tcp :0: %+v", e)
 	}
-	p.addr = NewNetAddress(PubKeyToID(p.PrivKey.PubKey()), l.Addr())
-	p.quit = make(chan struct{})
-	go p.accept(l)
+	rp.addr = NewNetAddress(PubKeyToID(rp.PrivKey.PubKey()), l.Addr())
+	rp.quit = make(chan struct{})
+	if rp.channels == nil {
+		rp.channels = []byte{testCh}
+	}
+	go rp.accept(l)
 }
 
-func (p *remotePeer) Stop() {
-	close(p.quit)
+func (rp *remotePeer) Stop() {
+	close(rp.quit)
 }
 
-func (p *remotePeer) accept(l net.Listener) {
+func (rp *remotePeer) accept(l net.Listener) {
 	conns := []net.Conn{}
 
 	for {
@@ -147,17 +141,19 @@ func (p *remotePeer) accept(l net.Listener) {
 		if err != nil {
 			golog.Fatalf("Failed to accept conn: %+v", err)
 		}
-		pc, err := newInboundPeerConn(conn, p.Config, p.PrivKey)
+
+		pc, err := newInboundPeerConn(conn, rp.Config, rp.PrivKey)
 		if err != nil {
 			golog.Fatalf("Failed to create a peer: %+v", err)
 		}
+
 		_, err = pc.HandshakeTimeout(NodeInfo{
-			ID:         p.Addr().ID,
+			ID:         rp.Addr().ID,
 			Moniker:    "remote_peer",
 			Network:    "testing",
 			Version:    "123.123.123",
 			ListenAddr: l.Addr().String(),
-			Channels:   []byte{testCh},
+			Channels:   rp.channels,
 		}, 1*time.Second)
 		if err != nil {
 			golog.Fatalf("Failed to perform handshake: %+v", err)
@@ -166,7 +162,7 @@ func (p *remotePeer) accept(l net.Listener) {
 		conns = append(conns, conn)
 
 		select {
-		case <-p.quit:
+		case <-rp.quit:
 			for _, conn := range conns {
 				if err := conn.Close(); err != nil {
 					golog.Fatal(err)

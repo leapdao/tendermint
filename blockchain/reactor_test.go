@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"net"
 	"testing"
 
 	cmn "github.com/tendermint/tmlibs/common"
@@ -35,7 +36,7 @@ func newBlockchainReactor(logger log.Logger, maxBlockHeight int64) *BlockchainRe
 	fastSync := true
 	var nilApp proxy.AppConnConsensus
 	blockExec := sm.NewBlockExecutor(dbm.NewMemDB(), log.TestingLogger(), nilApp,
-		types.MockMempool{}, types.MockEvidencePool{})
+		sm.MockMempool{}, sm.MockEvidencePool{})
 
 	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
@@ -204,3 +205,4 @@ func (tp *bcrTestPeer) IsOutbound() bool                     { return false }
 func (tp *bcrTestPeer) IsPersistent() bool                   { return true }
 func (tp *bcrTestPeer) Get(s string) interface{}             { return s }
 func (tp *bcrTestPeer) Set(string, interface{})              {}
+func (tp *bcrTestPeer) RemoteIP() net.IP                     { return []byte{127, 0, 0, 1} }

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	cfg "github.com/tendermint/tendermint/config"
+	"github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/p2p/conn"
 	cmn "github.com/tendermint/tmlibs/common"
 )
@@ -55,8 +55,7 @@ type AddrBook interface {
 type Switch struct {
 	cmn.BaseService
 
-	config       *cfg.P2PConfig
-	peerConfig   *PeerConfig
+	config       *config.P2PConfig
 	listeners    []Listener
 	reactors     map[string]Reactor
 	chDescs      []*conn.ChannelDescriptor
@@ -71,14 +70,15 @@ type Switch struct {
 	filterConnByAddr func(net.Addr) error
 	filterConnByID   func(ID) error
 
+	mConfig conn.MConnConfig
+
 	rng *cmn.Rand // seed for randomizing dial times and orders
 }
 
 // NewSwitch creates a new Switch with the given config.
-func NewSwitch(config *cfg.P2PConfig) *Switch {
+func NewSwitch(cfg *config.P2PConfig) *Switch {
 	sw := &Switch{
-		config:       config,
-		peerConfig:   DefaultPeerConfig(),
+		config:       cfg,
 		reactors:     make(map[string]Reactor),
 		chDescs:      make([]*conn.ChannelDescriptor, 0),
 		reactorsByCh: make(map[byte]Reactor),
@@ -90,12 +90,13 @@ func NewSwitch(config *cfg.P2PConfig) *Switch {
 	// Ensure we have a completely undeterministic PRNG.
 	sw.rng = cmn.NewRand()
 
-	// TODO: collapse the peerConfig into the config ?
-	sw.peerConfig.MConfig.FlushThrottle = time.Duration(config.FlushThrottleTimeout) * time.Millisecond
-	sw.peerConfig.MConfig.SendRate = config.SendRate
-	sw.peerConfig.MConfig.RecvRate = config.RecvRate
-	sw.peerConfig.MConfig.MaxPacketMsgPayloadSize = config.MaxPacketMsgPayloadSize
-	sw.peerConfig.AuthEnc = config.AuthEnc
+	mConfig := conn.DefaultMConnConfig()
+	mConfig.FlushThrottle = time.Duration(cfg.FlushThrottleTimeout) * time.Millisecond
+	mConfig.SendRate = cfg.SendRate
+	mConfig.RecvRate = cfg.RecvRate
+	mConfig.MaxPacketMsgPayloadSize = cfg.MaxPacketMsgPayloadSize
+
+	sw.mConfig = mConfig
 
 	sw.BaseService = *cmn.NewBaseService(nil, "P2P Switch", sw)
 	return sw
@@ -403,8 +404,8 @@ func (sw *Switch) DialPeersAsync(addrBook AddrBook, peers []string, persistent b
 			sw.randomSleep(0)
 			err := sw.DialPeerWithAddress(addr, persistent)
 			if err != nil {
-				switch err {
-				case ErrSwitchConnectToSelf, ErrSwitchDuplicatePeer:
+				switch err.(type) {
+				case ErrSwitchConnectToSelf, ErrSwitchDuplicatePeerID:
 					sw.Logger.Debug("Error dialing peer", "err", err)
 				default:
 					sw.Logger.Error("Error dialing peer", "err", err)
@@ -420,7 +421,7 @@ func (sw *Switch) DialPeersAsync(addrBook AddrBook, peers []string, persistent b
 func (sw *Switch) DialPeerWithAddress(addr *NetAddress, persistent bool) error {
 	sw.dialing.Set(string(addr.ID), addr)
 	defer sw.dialing.Delete(string(addr.ID))
-	return sw.addOutboundPeerWithConfig(addr, sw.peerConfig, persistent)
+	return sw.addOutboundPeerWithConfig(addr, sw.config, persistent)
 }
 
 // sleep for interval plus some random amount of ms on [0, dialRandomizerIntervalMilliseconds]
@@ -477,7 +478,7 @@ func (sw *Switch) listenerRoutine(l Listener) {
 		}
 
 		// New inbound connection!
-		err := sw.addInboundPeerWithConfig(inConn, sw.peerConfig)
+		err := sw.addInboundPeerWithConfig(inConn, sw.config)
 		if err != nil {
 			sw.Logger.Info("Ignoring inbound connection: error while adding peer", "address", inConn.RemoteAddr().String(), "err", err)
 			continue
@@ -487,7 +488,10 @@ func (sw *Switch) listenerRoutine(l Listener) {
 	// cleanup
 }
 
-func (sw *Switch) addInboundPeerWithConfig(conn net.Conn, config *PeerConfig) error {
+func (sw *Switch) addInboundPeerWithConfig(
+	conn net.Conn,
+	config *config.P2PConfig,
+) error {
 	peerConn, err := newInboundPeerConn(conn, config, sw.nodeKey.PrivKey)
 	if err != nil {
 		conn.Close() // peer is nil
@@ -504,10 +508,20 @@ func (sw *Switch) addInboundPeerWithConfig(conn net.Conn, config *PeerConfig) er
 // dial the peer; make secret connection; authenticate against the dialed ID;
 // add the peer.
 // if dialing fails, start the reconnect loop. If handhsake fails, its over.
-// If peer is started succesffuly, reconnectLoop will start when StopPeerForError is called
-func (sw *Switch) addOutboundPeerWithConfig(addr *NetAddress, config *PeerConfig, persistent bool) error {
+// If peer is started succesffuly, reconnectLoop will start when
+// StopPeerForError is called
+func (sw *Switch) addOutboundPeerWithConfig(
+	addr *NetAddress,
+	config *config.P2PConfig,
+	persistent bool,
+) error {
 	sw.Logger.Info("Dialing peer", "address", addr)
-	peerConn, err := newOutboundPeerConn(addr, config, persistent, sw.nodeKey.PrivKey)
+	peerConn, err := newOutboundPeerConn(
+		addr,
+		config,
+		persistent,
+		sw.nodeKey.PrivKey,
+	)
 	if err != nil {
 		if persistent {
 			go sw.reconnectToPeer(addr)
@@ -526,7 +540,8 @@ func (sw *Switch) addOutboundPeerWithConfig(addr *NetAddress, config *PeerConfig
 // that already has a SecretConnection. If all goes well,
 // it starts the peer and adds it to the switch.
 // NOTE: This performs a blocking handshake before the peer is added.
-// NOTE: If error is returned, caller is responsible for calling peer.CloseConn()
+// NOTE: If error is returned, caller is responsible for calling
+// peer.CloseConn()
 func (sw *Switch) addPeer(pc peerConn) error {
 
 	addr := pc.conn.RemoteAddr()
@@ -534,12 +549,8 @@ func (sw *Switch) addPeer(pc peerConn) error {
 		return err
 	}
 
-	// NOTE: if AuthEnc==false, we don't have a peerID until after the handshake.
-	// If AuthEnc==true then we already know the ID and could do the checks first before the handshake,
-	// but it's simple to just deal with both cases the same after the handshake.
-
 	// Exchange NodeInfo on the conn
-	peerNodeInfo, err := pc.HandshakeTimeout(sw.nodeInfo, time.Duration(sw.peerConfig.HandshakeTimeout*time.Second))
+	peerNodeInfo, err := pc.HandshakeTimeout(sw.nodeInfo, time.Duration(sw.config.HandshakeTimeout))
 	if err != nil {
 		return err
 	}
@@ -547,13 +558,14 @@ func (sw *Switch) addPeer(pc peerConn) error {
 	peerID := peerNodeInfo.ID
 
 	// ensure connection key matches self reported key
-	if pc.config.AuthEnc {
-		connID := pc.ID()
+	connID := pc.ID()
 
-		if peerID != connID {
-			return fmt.Errorf("nodeInfo.ID() (%v) doesn't match conn.ID() (%v)",
-				peerID, connID)
-		}
+	if peerID != connID {
+		return fmt.Errorf(
+			"nodeInfo.ID() (%v) doesn't match conn.ID() (%v)",
+			peerID,
+			connID,
+		)
 	}
 
 	// Validate the peers nodeInfo
@@ -564,20 +576,23 @@ func (sw *Switch) addPeer(pc peerConn) error {
 	// Avoid self
 	if sw.nodeKey.ID() == peerID {
 		addr := peerNodeInfo.NetAddress()
-
-		// remove the given address from the address book if we added it earlier
+		// remove the given address from the address book
+		// and add to our addresses to avoid dialing again
 		sw.addrBook.RemoveAddress(addr)
-
-		// add the given address to the address book to avoid dialing ourselves
-		// again this is our public address
 		sw.addrBook.AddOurAddress(addr)
-
-		return ErrSwitchConnectToSelf
+		return ErrSwitchConnectToSelf{addr}
 	}
 
 	// Avoid duplicate
 	if sw.peers.Has(peerID) {
-		return ErrSwitchDuplicatePeer
+		return ErrSwitchDuplicatePeerID{peerID}
+	}
+
+	// Check for duplicate connection or peer info IP.
+	if !sw.config.AllowDuplicateIP &&
+		(sw.peers.HasIP(pc.RemoteIP()) ||
+			sw.peers.HasIP(peerNodeInfo.NetAddress().IP)) {
+		return ErrSwitchDuplicatePeerIP{pc.RemoteIP()}
 	}
 
 	// Filter peer against ID white list
@@ -590,7 +605,7 @@ func (sw *Switch) addPeer(pc peerConn) error {
 		return err
 	}
 
-	peer := newPeer(pc, peerNodeInfo, sw.reactorsByCh, sw.chDescs, sw.StopPeerForError)
+	peer := newPeer(pc, sw.mConfig, peerNodeInfo, sw.reactorsByCh, sw.chDescs, sw.StopPeerForError)
 	peer.SetLogger(sw.Logger.With("peer", addr))
 
 	peer.Logger.Info("Successful handshake with peer", "peerNodeInfo", peerNodeInfo)

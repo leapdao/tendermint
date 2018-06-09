@@ -2,7 +2,7 @@
 
 This document explains how Tendermint Peers are identified and how they connect to one another.
 
-For details on peer discovery, see the [peer exchange (PEX) reactor doc](/docs/specification/new-spec/reactors/pex/pex.md).
+For details on peer discovery, see the [peer exchange (PEX) reactor doc](https://github.com/tendermint/tendermint/blob/master/docs/spec/reactors/pex/pex.md).
 
 ## Peer Identity
 
@@ -16,9 +16,6 @@ When attempting to connect to a peer, we use the PeerURL: `<ID>@<IP>:<PORT>`.
 We will attempt to connect to the peer at IP:PORT, and verify,
 via authenticated encryption, that it is in possession of the private key
 corresponding to `<ID>`. This prevents man-in-the-middle attacks on the peer layer.
-
-If `auth_enc = false`, peers can use an arbitrary ID, but they must always use
-one. Authentication can then happen out-of-band of Tendermint, for instance via VPN.
 
 ## Connections
 

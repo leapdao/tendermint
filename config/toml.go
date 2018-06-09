@@ -165,9 +165,6 @@ pex = {{ .P2P.PexReactor }}
 # Does not work if the peer-exchange reactor is disabled.
 seed_mode = {{ .P2P.SeedMode }}
 
-# Authenticated encryption
-auth_enc = {{ .P2P.AuthEnc }}
-
 # Comma separated list of peer IDs to keep private (will not be gossiped to other peers)
 private_peer_ids = "{{ .P2P.PrivatePeerIDs }}"
 
@@ -178,6 +175,12 @@ recheck = {{ .Mempool.Recheck }}
 recheck_empty = {{ .Mempool.RecheckEmpty }}
 broadcast = {{ .Mempool.Broadcast }}
 wal_dir = "{{ .Mempool.WalPath }}"
+
+# size of the mempool
+size = {{ .Mempool.Size }}
+
+# size of the cache (used to filter transactions we saw earlier)
+cache_size = {{ .Mempool.CacheSize }}
 
 ##### consensus configuration options #####
 [consensus]

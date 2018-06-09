@@ -1,5 +1,126 @@
 # Changelog
 
+## 0.20.0
+
+*June 6th, 2018*
+
+This is the first in a series of breaking releases coming to Tendermint after
+soliciting developer feedback and conducting security audits.
+
+This release does not break any blockchain data structures or
+protocols other than the ABCI messages between Tendermint and the application.
+
+Applications that upgrade for ABCI v0.11.0 should be able to continue running Tendermint
+v0.20.0 on blockchains created with v0.19.X
+
+BREAKING CHANGES
+
+- [abci] Upgrade to
+  [v0.11.0](https://github.com/tendermint/abci/blob/master/CHANGELOG.md#0110)
+- [abci] Change Query path for filtering peers by node ID from
+  `p2p/filter/pubkey/<id>` to `p2p/filter/id/<id>`
+
+## 0.19.9
+
+*June 5th, 2018*
+
+BREAKING CHANGES
+
+- [types/priv_validator] Moved to top level `privval` package
+
+FEATURES
+
+- [config] Collapse PeerConfig into P2PConfig
+- [docs] Add quick-install script
+- [docs/spec] Add table of Amino prefixes
+
+BUG FIXES
+
+- [rpc] Return 404 for unknown endpoints
+- [consensus] Flush WAL on stop
+- [evidence] Don't send evidence to peers that are behind
+- [p2p] Fix memory leak on peer disconnects
+- [rpc] Fix panic when `per_page=0`
+
+## 0.19.8
+
+*June 4th, 2018*
+
+BREAKING:
+
+- [p2p] Remove `auth_enc` config option, peer connections are always auth
+  encrypted. Technically a breaking change but seems no one was using it and
+  arguably a bug fix :)
+
+BUG FIXES
+
+- [mempool] Fix deadlock under high load when `skip_timeout_commit=true` and
+  `create_empty_blocks=false`
+
+## 0.19.7
+
+*May 31st, 2018*
+
+BREAKING:
+
+- [libs/pubsub] TagMap#Get returns a string value
+- [libs/pubsub] NewTagMap accepts a map of strings
+
+FEATURES
+
+- [rpc] the RPC documentation is now published to https://tendermint.github.io/slate
+- [p2p] AllowDuplicateIP config option to refuse connections from same IP.
+    - true by default for now, false by default in next breaking release
+- [docs] Add docs for query, tx indexing, events, pubsub
+- [docs] Add some notes about running Tendermint in production
+
+IMPROVEMENTS:
+
+- [consensus] Consensus reactor now receives events from a separate synchronous event bus,
+  which is not dependant on external RPC load
+- [consensus/wal] do not look for height in older files if we've seen height - 1
+- [docs] Various cleanup and link fixes
+
+## 0.19.6
+
+*May 29th, 2018*
+
+BUG FIXES
+
+- [blockchain] Fix fast-sync deadlock during high peer turnover
+
+BUG FIX:
+
+- [evidence] Dont send peers evidence from heights they haven't synced to yet
+- [p2p] Refuse connections to more than one peer with the same IP
+- [docs] Various fixes
+
+## 0.19.5
+
+*May 20th, 2018*
+
+BREAKING CHANGES
+
+- [rpc/client] TxSearch and UnconfirmedTxs have new arguments (see below)
+- [rpc/client] TxSearch returns ResultTxSearch
+- [version] Breaking changes to Go APIs will not be reflected in breaking
+  version change, but will be included in changelog.
+
+FEATURES
+
+- [rpc] `/tx_search` takes `page` (starts at 1) and `per_page` (max 100, default 30) args to paginate results
+- [rpc] `/unconfirmed_txs` takes `limit` (max 100, default 30) arg to limit the output
+- [config] `mempool.size` and `mempool.cache_size` options
+
+IMPROVEMENTS
+
+- [docs] Lots of updates
+- [consensus] Only Fsync() the WAL before executing msgs from ourselves
+
+BUG FIXES
+
+- [mempool] Enforce upper bound on number of transactions
+
 ## 0.19.4 (May 17th, 2018)
 
 IMPROVEMENTS
@@ -7,7 +128,6 @@ IMPROVEMENTS
 - [state] Improve tx indexing by using batches
 - [consensus, state] Improve logging (more consensus logs, fewer tx logs)
 - [spec] Moved to `docs/spec` (TODO cleanup the rest of the docs ...)
-
 
 BUG FIXES
 
