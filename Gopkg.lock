@@ -20,10 +20,10 @@
   revision = "95f809107225be108efcf10a3509e4ea6ceef3c4"
 
 [[projects]]
+  branch = "master"
   name = "github.com/fortytw2/leaktest"
   packages = ["."]
-  revision = "a5ef70473c97b71626b9abeda80ee92ba2a7de9e"
-  version = "v1.2.0"
+  revision = "b008db64ef8daabb22ff6daa557f33b41d8f6ccd"
 
 [[projects]]
   name = "github.com/fsnotify/fsnotify"
@@ -375,6 +375,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e05d697b9425c21e229aad07d88440d8f1a6476c3be92e963d6fbee32ef3f9b3"
+  inputs-digest = "a326e1ae2cf32be24b32ec226170222be19e5b383e9f19b40efc60bf2a87c727"
   solver-name = "gps-cdcl"
   solver-version = 1
