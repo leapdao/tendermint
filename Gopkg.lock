@@ -289,12 +289,6 @@
   revision = "e2150783cd35f5b607daca48afd8c57ec54cc995"
 
 [[projects]]
-  name = "github.com/tendermint/abci"
-  packages = ["types"]
-  revision = "68592f4d8ee34e97db94b7a7976b1309efdb7eb9"
-  version = "v0.10.0"
-
-[[projects]]
   branch = "master"
   name = "github.com/tendermint/ed25519"
   packages = [
@@ -309,16 +303,6 @@
   packages = ["."]
   revision = "2106ca61d91029c931fd54968c2bb02dc96b1412"
   version = "0.10.1"
-
-[[projects]]
-  name = "github.com/tendermint/tmlibs"
-  packages = [
-    "common",
-    "db",
-    "log"
-  ]
-  revision = "49596e0a1f48866603813df843c9409fc19805c6"
-  version = "v0.9.0"
 
 [[projects]]
   branch = "master"
@@ -430,6 +414,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d04757243039be81eb27adf41ae494c3daf55b9efa182ec16462138ddcbb3d99"
+  inputs-digest = "71753a9d4ece4252d23941f116f5ff66c0d5da730a099e5a9867491d223ed93b"
   solver-name = "gps-cdcl"
   solver-version = 1

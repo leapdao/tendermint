@@ -285,8 +285,8 @@ func NewNode(config *cfg.Config,
 		blockStore,
 		mempool,
 		evidencePool,
-		cs.WithMetrics(csMetrics),
 		proxyApp.Consensus(),
+		cs.WithMetrics(csMetrics),
 	)
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {

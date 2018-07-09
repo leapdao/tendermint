@@ -13,7 +13,7 @@ import (
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
 
-	abci "github.com/tendermint/abci/types"
+	abci "github.com/tendermint/tendermint/abci/types"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	tmevents "github.com/tendermint/tendermint/libs/events"
@@ -135,8 +135,8 @@ func NewConsensusState(
 	blockStore sm.BlockStore,
 	mempool sm.Mempool,
 	evpool sm.EvidencePool,
+	proxyApp proxy.AppConnConsensus,
 	options ...CSOption,
-	proxyApp proxy.AppConnConsensus
 ) *ConsensusState {
 	cs := &ConsensusState{
 		config:           config,
@@ -832,13 +832,13 @@ func (cs *ConsensusState) enterPropose(height int64, round int) {
 
 	// Nothing more to do if we're not a validator
 	if cs.privValidator == nil {
-		logger.Debug("This node is not a validator")
+		logger.Debug("This node is not a validator 1")
 		return
 	}
 
 	// if not a validator, we're done
 	if !cs.Validators.HasAddress(cs.privValidator.GetAddress()) {
-		logger.Debug("This node is not a validator", "addr", cs.privValidator.GetAddress(), "vals", cs.Validators)
+		logger.Debug("This node is not a validator 2", "addr", cs.privValidator.GetAddress(), "vals", cs.Validators)
 		return
 	}
 	logger.Debug("This node is a validator")
