@@ -1,11 +1,76 @@
 # Changelog
 
+## 0.22.4
+
+*July 14th, 2018*
+
+BREAKING CHANGES:
+- [genesis] removed deprecated `app_options` field.
+- [types] Genesis.AppStateJSON -> Genesis.AppState
+
+FEATURES:
+- [tools] Merged in from github.com/tendermint/tools
+
+BUG FIXES:
+- [tools/tm-bench] Various fixes
+- [consensus] Wait for WAL to stop on shutdown
+- [abci] Fix #1891, pending requests cannot hang when abci server dies. Previously a crash in BeginBlock could leave tendermint in broken state.
+
+## 0.22.3
+
+*July 10th, 2018*
+
+IMPROVEMENTS
+- Update dependencies
+    * pin all values in Gopkg.toml to version or commit
+    * update golang/protobuf to v1.1.0
+
+## 0.22.2
+
+*July 10th, 2018*
+
+IMPROVEMENTS
+- More cleanup post repo merge!
+- [docs] Include `ecosystem.json` and `tendermint-bft.md` from deprecated `aib-data` repository.
+- [config] Add `instrumentation.max_open_connections`, which limits the number
+  of requests in flight to Prometheus server (if enabled). Default: 3.
+
+
+BUG FIXES
+- [rpc] Allow unquoted integers in requests
+    - NOTE: this is only for URI requests. JSONRPC requests and all responses
+      will use quoted integers (the proto3 JSON standard).
+- [consensus] Fix halt on shutdown
+
+## 0.22.1
+
+*July 5th, 2018*
+
+IMPROVEMENTS
+
+* Cleanup post repo-merge.
+* [docs] Various improvements.
+
+BUG FIXES
+
+* [state] Return error when EndBlock returns a 0-power validator that isn't
+  already in the validator set.
+* [consensus] Shut down WAL properly.
+
+
 ## 0.22.0
 
 *July 2nd, 2018*
 
 BREAKING CHANGES:
-- [config] Rename `skip_upnp` to `upnp`, and turn it off by default.
+- [config]
+    * Remove `max_block_size_txs` and `max_block_size_bytes` in favor of
+        consensus params from the genesis file.
+    * Rename `skip_upnp` to `upnp`, and turn it off by default.
+    * Change `max_packet_msg_size` back to `max_packet_msg_payload_size`
+- [rpc]
+    * All integers are encoded as strings (part of the update for Amino v0.10.1)
+    * `syncing` is now called `catching_up`
 - [types] Update Amino to v0.10.1
     * Amino is now fully proto3 compatible for the basic types
     * JSON-encoded types now use the type name instead of the prefix bytes
@@ -16,9 +81,6 @@ BREAKING CHANGES:
     * `tmlibs/merkle` -> `crypto/merkle`. Uses SHA256 instead of RIPEMD160
 - [tmlibs] Update to v0.9.0 and merge into `libs`
     * remove `merkle` package (moved to `crypto/merkle`)
-- [rpc] 
-    * All integers are encoded as strings (part of the update for Amino v0.10.1)
-    * `syncing` is now called `catching_up`
 
 FEATURES
 - [cmd] Added metrics (served under `/metrics` using a Prometheus client;
