@@ -373,6 +373,7 @@ func NewNode(config *cfg.Config,
 		blockStore,
 		mempool,
 		evidencePool,
+		proxyApp.Consensus(),
 		cs.StateMetrics(csMetrics),
 	)
 	consensusState.SetLogger(consensusLogger)
