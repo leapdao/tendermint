@@ -145,8 +145,8 @@ func validatorAtHeight(h int64) *types.Validator {
 	return nil
 }
 
-func SetReadonly(readonly bool) (*ctypes.ResultSetReadonly, error) {
+func SetReadonly(ctx *rpctypes.Context, readonly bool) (*ctypes.ResultSetReadonly, error) {
 	consensusState.SetReadonly(readonly)
 
-	return &ctypes.ResultSetReadonly{"Set validator as readonly: " + strconv.FormatBool(readonly)}, nil
+	return &ctypes.ResultSetReadonly{Log: "Set validator as readonly: " + strconv.FormatBool(readonly)}, nil
 }
