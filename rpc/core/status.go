@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"time"
-	"strconv"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/p2p"
@@ -112,7 +111,6 @@ func Status(ctx *rpctypes.Context) (*ctypes.ResultStatus, error) {
 			Address:     pubKey.Address(),
 			PubKey:      pubKey,
 			VotingPower: votingPower,
-			IsReadonly:	 consensusState.IsReadonly(),
 		},
 	}
 
@@ -143,10 +141,4 @@ func validatorAtHeight(h int64) *types.Validator {
 	}
 
 	return nil
-}
-
-func SetReadonly(ctx *rpctypes.Context, readonly bool) (*ctypes.ResultSetReadonly, error) {
-	consensusState.SetReadonly(readonly)
-
-	return &ctypes.ResultSetReadonly{Log: "Set validator as readonly: " + strconv.FormatBool(readonly)}, nil
 }

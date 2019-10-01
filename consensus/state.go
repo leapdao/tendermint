@@ -7,7 +7,6 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
-	"strconv"
 
 	"github.com/pkg/errors"
 
@@ -138,8 +137,6 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
-
-	readonly bool
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -172,7 +169,6 @@ func NewConsensusState(
 		evpool:           evpool,
 		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
-		readonly:         config.Readonly,
 	}
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
@@ -771,24 +767,6 @@ func (cs *ConsensusState) handleTxsAvailable() {
 	cs.enterPropose(cs.Height, 0)
 }
 
-func (cs *ConsensusState) SetReadonly(readonly bool) {
-	cs.Logger.Info("[SetReadonly]: Set to " + strconv.FormatBool(readonly) + " " + strconv.FormatBool(cs.readonly))
-	cs.mtx.Lock()
-	cs.readonly = readonly
-	cs.mtx.Unlock()
-
-	if (!cs.readonly) {
-		if (cs.LastCommit.HasAll()) {
-			// Fix consensus stalling after readOnly switch with no other validators in the network
-			cs.scheduleTimeout(5000, cs.Height, cs.Round, cstypes.RoundStepPrevoteWait)
-		}
-	}
-}
-
-func (cs *ConsensusState) IsReadonly() bool {
-	return cs.readonly;
-}
-
 //-----------------------------------------------------------------------------
 // State functions
 // Used internally by handleTimeout and handleMsg to make state transitions
@@ -910,12 +888,6 @@ func (cs *ConsensusState) enterPropose(height int64, round int) {
 
 	if cs.isProposer(address) {
 		logger.Info("enterPropose: Our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
-
-		// validator is readonly, do nothing
-		if (cs.readonly) {
-			logger.Info("enterPropose: Validator is in readonly mode. Skipping..")
-			return
-		}
 
 		if height % 32 == 0 {
 			rsp, err := cs.proxyApp.CheckBridgeSync(abci.RequestCheckBridge{Height: int32(round)})
@@ -1768,12 +1740,6 @@ func (cs *ConsensusState) voteTime() time.Time {
 func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) *types.Vote {
 	// if we don't have a key or we're not in the validator set, do nothing
 	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetPubKey().Address()) {
-		return nil
-	}
-
-	// validator is readonly, do nothing
-	if (cs.readonly) {
-		cs.Logger.Info("signAddVote: Validator is in readonly mode")
 		return nil
 	}
 
